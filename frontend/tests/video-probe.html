@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>video-probe</title></head>
+<body>
+<h1>video-probe</h1>
+<video id="v" controls style="width:400px;background:#000"></video>
+<pre id="out"></pre>
+<script>
+(function () {
+  var out = document.getElementById("out");
+  var v = document.getElementById("v");
+  var seq = 0;
+  // Natijani ikki yo'l bilan uzatamiz: console (stdout pref bo'lsa) va img-beacon
+  function log(msg) {
+    out.textContent += msg + "\n";
+    console.log("[probe] " + msg);
+    try { new Image().src = "http://localhost:8899/log?l=" + encodeURIComponent("[probe] " + msg); } catch (e) {}
+  }
+
+  var url = "/api/movies/a-1907cf/video/360p?userId=99999";
+  fetch(url).then(function (r) { return r.json(); }).then(function (json) {
+    if (!json.ok) { log("API xato: " + JSON.stringify(json.error)); return; }
+    var streamUrl = json.data.url;
+    log("streamURL=" + streamUrl);
+    log("sameOrigin=" + (new URL(streamUrl).origin === location.origin));
+
+    v.crossOrigin = null;
+    v.src = streamUrl;
+    v.onloadstart = function () { log("ev:onloadstart"); };
+    v.onprogress = function () { log("ev:onprogress"); };
+    v.onloadedmetadata = function () { log("ev:onloadedmetadata duration=" + v.duration + " vw=" + v.videoWidth + " vh=" + v.videoHeight); };
+    v.onloadeddata = function () { log("ev:onloadeddata"); };
+    v.oncanplay = function () { log("ev:oncanplay"); };
+    v.onplaying = function () { log("ev:onplaying"); };
+    v.onerror = function () {
+      var c = v.error ? v.error.code : "?";
+      var m = v.error ? v.error.message : "?";
+      log("ev:onerror code=" + c + " msg=" + m);
+    };
+    v.onstalled = function () { log("ev:onstalled"); };
+    v.onwaiting = function () { log("ev:onwaiting"); };
+    v.onabort = function () { log("ev:onabort"); };
+    v.onemptied = function () { log("ev:onemptied"); };
+    v.onended = function () { log("ev:onended"); };
+    v.onplay = function () { log("ev:onplay"); };
+    v.onpause = function () { log("ev:onpause"); };
+
+    setTimeout(function () {
+      log("T5s readyState=" + v.readyState + " net=" + v.networkState + " buf=" + v.buffered.length);
+      log("T5s currentSrc=" + v.currentSrc);
+      log("T5s error=" + (v.error ? JSON.stringify({c:v.error.code,m:v.error.message}) : "null"));
+      v.play().then(function () { log("T5s play() resolved"); }).catch(function (e) { log("T5s play() rejected: " + e); });
+      setTimeout(function () {
+        log("T10s readyState=" + v.readyState + " paused=" + v.paused + " t=" + v.currentTime);
+        log("T10s error=" + (v.error ? JSON.stringify({c:v.error.code,m:v.error.message}) : "null"));
+        log("PROBE_DONE");
+      }, 5000);
+    }, 5000);
+  }).catch(function (e) { log("fetch xato: " + e); });
+})();
+</script>
+</body>
+</html>

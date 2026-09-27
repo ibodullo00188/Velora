@@ -1,0 +1,57 @@
+# KinoBot — docker compose orqali ishga tushirish
+#
+#   docker compose up -d --build      # ikki xizmatni ishga tushiradi
+#   docker compose logs -f api        # loglarni kuzatish
+#   docker compose down               # to'xtatish (data volume saqlanadi)
+#
+# Ikki xizmat:
+#   api  — REST API (backend/server.js), host'da 3000-port
+#   bot  — Telegram long-polling bot (backend/bot.js) — alohida jarayon
+#
+# Barcha maxfiy qiymatlar backend/.env faylidan olinadi
+# (git'ga kirmaydi — .gitignore himoya qiladi).
+
+services:
+  api:
+    build: .
+    image: kinobot-api:latest
+    container_name: kinobot-api
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      # Konteyner ichida port har doim 3000 (host tashqaridan boshqa portga
+      # ulashi mumkin: masalan "8000:3000" qilsangiz http://localhost:8000)
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      # db.json doimiy saqlanishi uchun named volume (container qayta
+      # yaratilsa ham ma'lumot yo'qolmaydi)
+      - kinobot-data:/app/backend/data
+    healthcheck:
+      # BusyBox wget (alpine) — health endpoint'ni tekshiradi
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  bot:
+    build: .
+    image: kinobot-bot:latest
+    container_name: kinobot-bot
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      PORT: "3000"
+    # Bot api'dan oldin ishga tushishi shart emas — ular bevosita bog'liq emas,
+    # faqat BOT_TOKEN orqali. Shunga qaramay api'ni avval qurib olish uchun:
+    depends_on:
+      - api
+    # Long polling tashqi port talab qilmaydi
+    command: ["node", "bot.js"]
+
+volumes:
+  kinobot-data:

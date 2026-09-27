@@ -1,0 +1,105 @@
+# render.yaml — KinoBot uchun Render Blueprint (FREE tarif)
+#
+# MUHIM: Render'ning Free tarifida "Background Worker" xizmat turi UMUMAN
+# yo'q (faqat pullik tariflarda bor). Shuning uchun bitta oddiy 2-xizmatli
+# sxema (API + alohida bot workeri) Free tarifda ishlamaydi.
+#
+# Shu sababli bu yerda BITTA "web" xizmati bor: u `start-all.js` orqali
+# REST API/WebApp serverini (server.js) VA Telegram botni (bot.js, long
+# polling) bitta konteynerda birga ishga tushiradi. Ikkala fayl ham
+# o'zgartirilmagan — start-all.js ularni faqat birga boshqaradi.
+#
+# FREE TARIFNING 2 TA MUHIM CHEKLOVI (bu Render'ning o'zi shunday, kod
+# bilan tuzatib bo'lmaydi):
+#
+#   1) DOIMIY DISK YO'Q. backend/data/db.json (filmlar, foydalanuvchilar,
+#      sevimlilar, to'lovlar...) xizmat qayta ishga tushganda yoki
+#      15 daqiqa harakatsizlikdan keyin "uxlab" qolib, keyin qayta
+#      uyg'onganda 0'DAN BOSHLANADI. Bu demo/test uchun yaroqli, lekin
+#      haqiqiy foydalanuvchi ma'lumotini (ayniqsa to'lovlarni) doimiy
+#      saqlash uchun EMAS. Doimiy saqlash kerak bo'lsa — Starter+ tarif
+#      va pastdagi (izohga olingan) "disk" bo'limini yoqing.
+#
+#   2) BOT UZLUKSIZ ISHLAMAYDI. Render Free xizmatlarni 15 daqiqa HTTP
+#      so'rovi kelmasa "uxlatadi" — bu ICHKI jarayonlarga (bot polling)
+#      ham tegishli, ya'ni bot ham to'xtaydi. Uyg'otish uchun tashqi
+#      "keep-alive" ping (masalan cron-job.org yoki UptimeRobot, har
+#      10-14 daqiqada /api/health'ga so'rov) qo'shish mumkin — bu
+#      Render tomonidan rasman qo'llab-quvvatlanmaydi, lekin keng
+#      qo'llaniladigan amaliy yechim. To'liq uzluksizlik uchun yagona
+#      rasmiy yo'l — Starter+ tarif (spin-down yo'q).
+#
+# Ishlatish: Render dashboard -> New -> Blueprint -> shu repo'ni tanlang.
+
+services:
+  - type: web
+    name: kinobot
+    env: node
+    plan: free
+    region: frankfurt          # Markaziy Osiyoga yaqinroq bo'lishi uchun singapore ham ko'rib chiqilsin
+    rootDir: backend
+    buildCommand: npm install  # tashqi kutubxona yo'q, tez tugaydi — kodni o'zgartirmaydi
+    startCommand: node start-all.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: WEBAPP_URL
+        sync: false             # shu xizmatning o'z Render URL'i, masalan https://kinobot.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false             # frontend shu bilan bir origin bo'lgani uchun odatda bo'sh qoldirsa ham bo'ladi
+      - key: DATABASE_URL
+        sync: false
+        # IXTIYORIY, LEKIN TAVSIYA ETILADI: Neon (yoki boshqa Postgres)
+        # connection string. Bo'sh qoldirilsa — matn ma'lumotlar
+        # (filmlar, foydalanuvchilar) data/db.json fayliga saqlanadi,
+        # bu esa Free tarifda xizmat uxlab-uyg'onganda YO'QOLADI.
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+        # IXTIYORIY, LEKIN TAVSIYA ETILADI: poster/banner rasmlari uchun.
+        # https://imagekit.io -> ro'yxatdan o'ting (bepul: 20GB) ->
+        # Dashboard -> Developer options -> Private Key va URL-endpoint.
+        # Bo'sh qoldirilsa, rasmlar DATABASE_URL bo'lsa Postgres'ga,
+        # bo'lmasa diskka (Free tarifda vaqtinchalik) saqlanadi.
+      - key: LOCAL_VIDEOS_DIR
+        value: /opt/render/project/src/backend/data/videos
+        # DIQQAT: Free tarifda bu papka DOIMIY EMAS. Video R2/Kali orqali
+        # emas, Telegram kanaldan forward qilish orqali yetkaziladi.
+      - key: CHANNEL_ID
+        sync: false
+      - key: DEV_MODE
+        value: "0"          # production'da HAR DOIM o'chiq bo'lishi kerak (xavfsizlik)
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: STORAGE_CHANNEL_ID
+        sync: false
+      - key: STREAM_BOT_TOKENS
+        sync: false
+        # IXTIYORIY: video-strim uchun qo'shimcha bot tokenlar (flood-control
+        # kamaytirish uchun round-robin pool). Vergul bilan ajratilgan holda
+        # kiriting, masalan: 111111:AAA...,222222:BBB... Bo'sh qoldirish
+        # mumkin — shunda faqat asosiy BOT_TOKEN ishlatiladi.
+        # DIQQAT: bu 3 tasi kanaldan-avtomatik-saqlash (channelAutoSave.js)
+        # uchun kerak. mtproto.js bot TOKEN bilan kiradi (client.start
+        # botAuthToken orqali) — alohida login/kod SO'RALMAYDI, shuning
+        # uchun sessiya fayli Free tarifning doimiy diski bo'lmasa ham
+        # muammo emas: xizmat har safar uyg'onganda shunchaki qayta
+        # (avtomatik, so'rovsiz) kiradi.
+
+    # --- Kelajakda Starter+ ga o'tsangiz, ma'lumotni doimiy saqlash uchun: ---
+    # plan: starter
+    # disk:
+    #   name: kinobot-data
+    #   mountPath: /opt/render/project/src/backend/data
+    #   sizeGB: 5

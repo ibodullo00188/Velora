@@ -1,0 +1,25 @@
+{
+  "name": "kinobot-backend",
+  "version": "2.0.0",
+  "description": "KinoBot Telegram Mini App uchun REST API (tashqi kutubxonasiz, faqat Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:all": "node start-all.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "db:migrate": "node scripts/db-migrate.js",
+    "db:backup": "node scripts/db-backup.js",
+    "db:restore": "node scripts/db-restore.js",
+    "db:migrate-to-postgres": "node scripts/db-migrate-to-postgres.js",
+    "bot": "node bot.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "telegram": "^2.26.22",
+    "pg": "^8.13.1"
+  }
+}

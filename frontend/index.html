@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>KinoBot — WebApp</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=3">
+<style>
+  /* KRITIK PLAYER CSS — keshdan mustaqil (HTML har doim yangi keladi).
+     Eski keshlangan style.css ustiga chiquvchi muhim qoidalar. */
+  #playerEl{
+    width:100%; height:100%; object-fit:cover; display:block; background:#000;
+    position:relative; z-index:1;
+  }
+  .player-video{
+    width:100%; position:relative; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; background:#000;
+    aspect-ratio:16/9; max-height:72vh;
+  }
+  .player-poster{position:absolute; inset:0; pointer-events:none;}
+  .player-poster:not([hidden]){z-index:0;}
+  #playerEl{z-index:1;}
+  @media (max-width:600px){
+    .player-video{max-height:62vh;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="topbar" id="topbar">
+    <button class="icon-btn" id="menuBtn" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="brand"><span class="brand-dot"></span>KinoBot</div>
+    <button class="icon-btn" id="searchShortcut" aria-label="Qidiruv">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+  </header>
+
+  <!-- ===================== SCREENS ===================== -->
+  <main class="screens" id="screens">
+
+    <!-- 1. HOME -->
+    <section class="screen active" id="screen-home">
+      <div class="scroll-area">
+        <div id="homeBanner" hidden></div>
+        <!-- Hero carousel (TRENDDAGI FILMLAR) olib tashlangan -->
+
+        <div class="section-row" id="continueRowWrap" hidden>
+          <h2 data-i18n="continueTitle">Davom etish</h2><a class="link-all" data-open="history" data-i18n="seeAll">Barchasi <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>
+        </div>
+        <div class="hscroll" id="continueRow"></div>
+
+        <div class="section-row">
+          <h2 data-i18n="trendingTitle">Trenddagi filmlar</h2><a class="link-all" data-open="catalog" data-i18n="seeAll">Barchasi <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>
+        </div>
+        <div class="hscroll" id="trendingRow"></div>
+
+        <div class="section-row">
+          <h2 data-i18n="newTitle">Yangi qo'shilganlar</h2><a class="link-all" data-open="catalog" data-i18n="seeAll">Barchasi <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>
+        </div>
+        <div class="grid-poster" id="newRow"></div>
+
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 2. CATALOG -->
+    <section class="screen" id="screen-catalog">
+      <div class="scroll-area">
+        <h1 class="page-title" data-i18n="catalogTitle">Katalog</h1>
+        <div class="genre-grid" id="genreGrid"></div>
+        <div class="section-row"><h2 id="catalogResultTitle">Barcha filmlar</h2></div>
+        <div class="list-cards" id="catalogList"></div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 3. SEARCH -->
+    <section class="screen" id="screen-search">
+      <div class="scroll-area">
+        <div class="search-bar-wrap">
+          <div class="search-input">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="searchInput" data-i18n-ph="searchPlaceholder" placeholder="Film nomini kiriting...">
+          </div>
+          <button class="icon-btn filter-btn" data-open="filter" aria-label="Filtr">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          </button>
+        </div>
+        <h2 class="sub-title" data-i18n="popularSearches">Ommabop qidiruvlar</h2>
+        <div class="tag-row" id="popularSearches"></div>
+        <h2 class="sub-title" data-i18n="searchResults">Natijalar</h2>
+        <div class="list-cards" id="searchResults"></div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 4. FILM DETAIL -->
+    <section class="screen" id="screen-detail">
+      <div class="scroll-area no-top-pad">
+        <div class="detail-hero" id="detailHero">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <button class="play-circle" id="detailPlayBtn" aria-label="Ko'rish">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.9l10.4-6.86a1.06 1.06 0 0 0 0-1.8L9.56 4.24A1.06 1.06 0 0 0 8 5.14z"/></svg>
+          </button>
+        </div>
+        <div class="detail-body">
+          <h1 id="detailTitle">—</h1>
+          <div class="detail-meta" id="detailMeta"></div>
+          <div class="tag-row" id="detailGenres"></div>
+          <p class="detail-desc" id="detailDesc"></p>
+          <div class="btn-row">
+            <button class="btn-primary flex1 detail-watch-btn" id="detailWatchBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.9l10.4-6.86a1.06 1.06 0 0 0 0-1.8L9.56 4.24A1.06 1.06 0 0 0 8 5.14z"/></svg>
+              <span id="detailWatchBtnText" data-i18n="watchInBot">Botda ko'rish</span>
+            </button>
+          </div>
+          <div class="btn-row-2">
+            <button class="btn-ghost" id="detailFavBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              <span id="detailFavText">Sevimlilarga qo'shish</span>
+            </button>
+          </div>
+          <div class="section-row"><h2 data-i18n="similarTitle">O'xshash filmlar</h2><a class="link-all" data-open="catalog" data-i18n="seeAll">Barchasi <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a></div>
+          <div class="hscroll" id="similarRow"></div>
+        </div>
+        <div style="height:40px"></div>
+      </div>
+    </section>
+
+    <!-- 5. PLAYER -->
+    <section class="screen" id="screen-player">
+      <div class="player-top">
+        <button class="icon-btn back-btn light" data-back aria-label="Orqaga">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <div class="player-video" id="playerVideo">
+          <div class="player-poster" id="playerPoster"></div>
+          <div class="player-empty" id="playerEmpty" hidden></div>
+          <video id="playerEl" controls playsinline hidden></video>
+          <div class="player-quality" id="playerQuality" hidden></div>
+          <button class="player-fs-btn" id="playerFullscreenBtn" aria-label="To'liq ekran" hidden></button>
+        </div>
+      </div>
+      <div class="scroll-area">
+        <h2 id="playerTitle" class="player-title">—</h2>
+        <p class="player-year" id="playerYear"></p>
+        <div class="btn-row-2">
+          <button class="btn-ghost" id="playerFavBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <span id="playerFavText">Sevimlilarga</span>
+          </button>
+        </div>
+        <div style="height:40px"></div>
+      </div>
+    </section>
+
+    <!-- 6. FAVORITES -->
+    <section class="screen" id="screen-favorites">
+      <div class="scroll-area">
+        <h1 class="page-title" data-i18n="favoritesTitle">Sevimlilar</h1>
+        <div class="list-cards" id="favList"></div>
+        <div class="empty-state" id="favEmpty" hidden>
+          <div class="empty-icon">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <p data-i18n="favEmpty">Sevimlilar ro'yxati bo'sh</p>
+          <button class="btn-primary" data-open="catalog" data-i18n="browseMovies">Filmlarni ko'rish</button>
+        </div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 7. HISTORY -->
+    <section class="screen" id="screen-history">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="historyTitle">Tarix</h1>
+        </div>
+        <div class="list-cards history-cards" id="historyList"></div>
+        <div class="empty-state" id="historyEmpty" hidden>
+          <div class="empty-icon">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <p data-i18n="histEmpty">Tarix hali bo'sh</p>
+        </div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 8. PROFILE -->
+    <section class="screen" id="screen-profile">
+      <div class="scroll-area">
+        <h1 class="page-title" data-i18n="profileTitle">Profil</h1>
+        <div class="profile-card">
+          <div class="avatar" id="profileAvatar">?</div>
+          <div>
+            <div class="profile-name" id="profileName">—</div>
+            <div class="profile-username" id="profileUsername"></div>
+          </div>
+          <span class="premium-badge" id="profilePremiumBadge" hidden></span>
+        </div>
+        <div class="menu-list">
+          <div class="menu-item" id="premiumMenuItem">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span><span class="mi-text" id="premiumMenuLabel" data-i18n="premiumMenu">Premium</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item" data-open="history">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span class="mi-text" data-i18n="historyMenu">Ko'rilganlar tarixi</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item" data-open="settings">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span><span class="mi-text" data-i18n="settingsMenu">Sozlamalar</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item" data-open="admin">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="mi-text" data-i18n="adminMenu">Admin Panel</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item" id="profileContactMenuItem">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="mi-text" data-i18n="contactMenu">Biz bilan bog'lanish</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item" id="logoutItem">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span><span class="mi-text" data-i18n="logoutMenu">Chiqish</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 9. SETTINGS -->
+    <section class="screen" id="screen-settings">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="settingsTitle">Sozlamalar</h1>
+        </div>
+
+        <h2 class="sub-title" data-i18n="languageSection">Til / Language</h2>
+        <div class="chip-row" id="langRow">
+          <button class="chip-select" data-lang="uz">O'zbekcha</button>
+          <button class="chip-select" data-lang="en">English</button>
+          <button class="chip-select" data-lang="ru">Русский</button>
+        </div>
+
+        <h2 class="sub-title" data-i18n="themeSection">Mavzu / Theme</h2>
+        <div class="chip-row" id="themeRow">
+          <button class="chip-select" data-theme-set="dark">🌙 <span data-i18n="themeDark">Qora</span></button>
+          <button class="chip-select" data-theme-set="light">☀️ <span data-i18n="themeLight">Yorug'</span></button>
+          <button class="chip-select" data-theme-set="system">🔵 <span data-i18n="themeSystem">Avtomatik</span></button>
+        </div>
+
+        <div class="menu-list" style="margin-top:22px">
+          <div class="menu-item" data-open="info">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="mi-text" data-i18n="aboutApp">Ilova haqida</span></div>
+            <span class="menu-val">KinoBot v2.0</span><svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 10. ADMIN -->
+    <section class="screen" id="screen-admin">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="adminTitle">Admin Panel</h1>
+          <button class="icon-btn" id="adminPasswordBtn" hidden aria-label="Parolni o'zgartirish" title="Parolni o'zgartirish">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+          <button class="icon-btn" id="adminBannerBtn" hidden aria-label="Banner" title="Banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v3a1 1 0 0 0 1 1h2l3 3v-11l-3 3H4a1 1 0 0 0-1 1z"/><path d="M14 9a4 4 0 0 1 0 6"/><path d="M17 6a8 8 0 0 1 0 12"/></svg>
+          </button>
+        </div>
+        <div class="admin-stats" id="adminStats"></div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-tab="films"><span data-i18n="adminFilmsTab">Filmlar</span></button>
+          <button class="admin-tab" data-tab="channels"><span data-i18n="adminChannelsTab">Kanallar</span></button>
+          <button class="admin-tab" data-tab="storage"><span data-i18n="adminStorageTab">Kanal videolari</span></button>
+          <button class="admin-tab" data-tab="users"><span data-i18n="adminUsersTab">Foydalanuvchilar</span></button>
+          <button class="admin-tab" data-tab="stats"><span data-i18n="adminStatsTab">Statistika</span></button>
+          <button class="admin-tab" data-tab="audit"><span data-i18n="adminAuditTab">Audit log</span></button>
+          <button class="admin-tab" data-tab="contact"><span data-i18n="adminContactTab">Xabarlar</span><span class="tab-badge" id="contactTabBadge" hidden></span></button>
+          <button class="admin-tab" data-tab="premium"><span data-i18n="adminPremiumTab">Premium</span><span class="tab-badge" id="premiumTabBadge" hidden></span></button>
+        </div>
+        <button class="btn-primary full" id="addFilmBtn" hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span data-i18n="addFilm">Film qo'shish</span>
+        </button>
+        <div id="adminPane"></div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 11. FILTER -->
+    <section class="screen" id="screen-filter">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="filterTitle">Filtr va saralash</h1>
+        </div>
+        <h2 class="sub-title" data-i18n="filterGenres">Janrlar</h2>
+        <div class="chip-row" id="filterGenres"></div>
+        <h2 class="sub-title" data-i18n="filterYear">Yil</h2>
+        <div class="range-row"><span id="yearSliderVal">1900</span><input type="range" min="1900" max="2026" value="1900" class="slider" id="yearSlider"><span>2026</span></div>
+        <h2 class="sub-title" data-i18n="filterRating">Reyting</h2>
+        <div class="range-row"><span id="ratingSliderVal">0</span><input type="range" min="0" max="10" value="0" class="slider" id="ratingSlider"><span>10</span></div>
+        <div style="height:20px"></div>
+      </div>
+      <div class="filter-footer">
+        <button class="btn-secondary flex1" id="filterClearBtn" data-i18n="filterClear">Tozalash</button>
+        <button class="btn-primary flex1" id="filterApplyBtn" data-i18n="filterApply">Qo'llash</button>
+      </div>
+    </section>
+
+    <!-- 12. INFO -->
+    <section class="screen" id="screen-info">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="infoTitle">KinoBot haqida</h1>
+        </div>
+        <div class="info-hero">
+          <div class="info-logo">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+          </div>
+          <p data-i18n="infoDesc">KinoBot — sizga eng yaxshi kinolarni taqdim etuvchi bot.</p>
+          <span class="version-tag">KinoBot v2.0</span>
+        </div>
+        <div class="menu-list">
+          <div class="menu-item" id="contactMenuItem">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="mi-text" data-i18n="contactMenu">Biz bilan bog'lanish</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="menu-item">
+            <div class="mi-label"><span class="mi-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span class="mi-text" data-i18n="privacyPolicy">Maxfiylik siyosati</span></div>
+            <svg class="mi-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+    <!-- 13. PREMIUM -->
+    <section class="screen" id="screen-premium">
+      <div class="scroll-area">
+        <div class="row-header">
+          <button class="icon-btn back-btn" data-back aria-label="Orqaga">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1 class="page-title inline" data-i18n="premiumTitle">Premium</h1>
+        </div>
+
+        <!-- Faol premium holati -->
+        <div class="premium-status-card" id="premiumStatusCard" hidden></div>
+
+        <!-- Paket tanlash (faqat free foydalanuvchiga) -->
+        <div id="premiumPurchaseWrap">
+          <h2 class="sub-title" data-i18n="premiumChoosePlan">Paketni tanlang</h2>
+          <div class="premium-plans" id="premiumPlans"></div>
+
+          <h2 class="sub-title" data-i18n="premiumPaymentDetails">To'lov rekvizitlari</h2>
+          <div class="premium-card-info" id="premiumCardInfo"></div>
+
+          <h2 class="sub-title" data-i18n="premiumUploadCheck">Chek rasmini yuklang</h2>
+          <div class="premium-check-upload">
+            <div class="poster-preview-wrapper" id="premiumCheckWrapper">
+              <span class="poster-preview" id="premiumCheckPreview"><span class="poster-preview-empty">—</span></span>
+              <label class="poster-file-label" for="premiumCheckFile">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span data-i18n="premiumCheckHint">Chek rasmini tanlang (JPG/PNG, 3MB gacha)</span>
+              </label>
+              <input type="file" id="premiumCheckFile" accept="image/*" class="poster-file-input">
+            </div>
+          </div>
+
+          <button class="btn-primary full" id="premiumSubmitBtn" style="margin-top:16px">
+            <span data-i18n="premiumSubmitBtn">To'lovni yuborish</span>
+          </button>
+          <p class="premium-hint" data-i18n="premiumPendingHint">To'lov yuborilgandan so'ng, admin tekshirib chiqadi va Premium faollashtiriladi.</p>
+        </div>
+
+        <!-- Foydalanuvchining to'lovlar tarixi -->
+        <div id="premiumHistoryWrap" hidden>
+          <h2 class="sub-title" data-i18n="premiumHistoryTitle">To'lovlar tarixi</h2>
+          <div class="premium-history-list" id="premiumHistoryList"></div>
+        </div>
+
+        <div style="height:90px"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================== BOTTOM NAV ===================== -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-btn active" data-open="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span data-i18n="navHome">Bosh sahifa</span>
+    </button>
+    <button class="nav-btn" data-open="catalog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span data-i18n="navCatalog">Katalog</span>
+    </button>
+    <button class="nav-btn" data-open="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span data-i18n="navSearch">Qidiruv</span>
+    </button>
+    <button class="nav-btn" data-open="favorites">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <span data-i18n="navFavorites">Sevimlilar</span>
+    </button>
+    <button class="nav-btn" data-open="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span data-i18n="navProfile">Profil</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- Toast + modal konteynerlari (app.js to'ldiradi) -->
+<div id="toast" hidden></div>
+<div id="modalOverlay" hidden></div>
+<div id="fsModalOverlay" class="modal-fullscreen"></div>
+
+<!-- BLOCKED ekran: hisob bloklanganda butun interfeysni qoplaydi -->
+<div id="blockedOverlay" hidden>
+  <div class="blocked-card">
+    <div class="blocked-ic">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h2 data-i18n="blockedTitle">Hisobingiz bloklangan</h2>
+    <p data-i18n="blockedDesc">Administrator hisobingizni vaqtincha to'xtatdi. Iltimos, keyinroq qayta urinib ko'ring yoki yordam uchun administrator bilan bog'laning.</p>
+  </div>
+</div>
+
+<!-- SUBSCRIBE ekran: majburiy kanallarga obuna bo'lmagan foydalanuvchi uchun -->
+<div id="subscribeOverlay" hidden>
+  <div class="subscribe-card">
+    <div class="subscribe-ic">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+    </div>
+    <h2 data-i18n="subscribeTitle">Obuna bo'ling</h2>
+    <p data-i18n="subscribeMessage">Ilovadan foydalanish uchun quyidagi kanallarga obuna bo'ling</p>
+    <div class="subscribe-channel-list" id="subscribeChannelList"></div>
+    <p class="subscribe-recheck-hint" id="subscribeRecheckHint" data-i18n="subscribeStillMissing">Hali barcha kanallarga obuna bo'lmadingiz</p>
+    <button class="btn-primary full" id="subscribeCheckBtn" data-i18n="subscribeCheckBtn">Tekshirish</button>
+  </div>
+</div>
+
+<script src="js/api.js?v=2"></script>
+<script src="js/player.js?v=2"></script>
+<script src="js/app.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+# KinoBot API — systemd xizmati (REST API)
+#
+# O'rnatish:
+#   sudo cp deploy/kinobot-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kinobot-api
+#
+# Holatni tekshirish:   systemctl status kinobot-api
+# Loglarni ko'rish:     journalctl -u kinobot-api -f
+#
+# DIQQAT: quyidagi ikkita yo'lni o'zingizning server tuzilmangizga moslang:
+#   1) ExecStart dagi node.js yo'li  (tekshirish: `which node`)
+#   2) WorkingDirectory (proyekt joylashgan papka)
+
+[Unit]
+Description=KinoBot REST API (backend/server.js)
+Documentation=https://github.com/your-user/kinobot-project
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# O'zingizning yo'llaringizga almashtiring:
+ExecStart=/usr/bin/node /opt/kinobot/backend/server.js
+WorkingDirectory=/opt/kinobot/backend
+
+# .env fayli WorkingDirectory dan o'qiladi (server.js avtomatik yuklaydi).
+# EnvironmentFile faqat process.env'da yo'q bo'lgan qiymatlarni beradi.
+EnvironmentFile=/opt/kinobot/backend/.env
+
+# Production rejimi: qat'iy CORS + dev-mode o'chiq
+Environment=NODE_ENV=production
+
+# Ishlash rejimi va qayta ishga tushirish
+Restart=on-failure
+RestartSec=5
+
+# Xavfsizlik: non-root foydalanuvchi (o'zingizning system user'ingizga almashtiring)
+User=kinobot
+Group=kinobot
+
+# Ko'p so'rovlar uchun fayl deskriptor chegarasi
+LimitNOFILE=65536
+
+# Tozalash (start va stop da)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kinobot-api
+
+[Install]
+WantedBy=multi-user.target
