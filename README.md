@@ -4,8 +4,11 @@ KinoBot — Telegram orqali ishlaydigan kino katalogi. Bot (`backend/bot.js`)
 WebApp'ni ochadigan tugma yuboradi, WebApp (`frontend/`) 12 ekranli kino
 ilovasi bo'lib REST API (`backend/server.js`) orqali ma'lumot oladi.
 
-**Tashqi kutubxonasiz** — backend faqat Node.js ichki modullarini
-(`http`, `crypto`, `fs`, `https`) ishlatadi. `npm install` shart emas.
+Node.js backend. `cd backend && npm ci` orqali kutubxonalarni o‘rnating.
+
+**Backup va qo‘lda restore:** [qo‘llanma](backend/docs/TELEGRAM_BACKUP.md).
+Har kuni 09:00 va 21:00 (Toshkent) kanalga shifrlangan backup yuboriladi.
+Tiklash faqat admin faylni botga forward qilib, tasdiqlagandan keyin bajariladi.
 
 ---
 

@@ -7,7 +7,6 @@
 const fs = require("fs");
 const path = require("path");
 
-const db = require("./db");
 const imagekitStore = require("./imagekitStore");
 const { detectImageExt } = require("./posterStore");
 
@@ -16,7 +15,7 @@ function imagekitObjectName(ext) {
   return `kinobot/banner.${ext}`;
 }
 
-const BANNER_ROOT = path.join(__dirname, "..", "data", "banner");
+const BANNER_ROOT = path.join(path.dirname(require("./db").getDbPath()), "banner");
 const ALLOWED_EXT = ["jpg", "jpeg", "png", "webp", "gif"];
 
 const MIME = {
@@ -36,14 +35,8 @@ function ensureDir() {
 }
 
 // Mavjud banner rasmini topadi.
-// Postgres-rejimda: { ext, buffer } | null (DB'dan)
 // Fayl-rejimda (avvalgidek): { ext, absPath } | null (diskdan)
 async function find() {
-  if (db.isPostgres()) {
-    const found = await db.findImage(BANNER_IMAGE_ID);
-    if (!found) return null;
-    return { ext: found.ext, buffer: found.data };
-  }
   ensureDir();
   for (const ext of ALLOWED_EXT) {
     const abs = path.join(BANNER_ROOT, `image.${ext}`);
@@ -56,7 +49,6 @@ async function find() {
   return null;
 }
 
-// Rasm yozadi. Ustuvorlik: ImageKit (sozlangan bo'lsa) → Postgres → disk.
 // ImageKit ishlatilganda { ext, url } qaytadi.
 async function save(buffer, ext) {
   if (imagekitStore.isConfigured()) {
@@ -66,10 +58,6 @@ async function save(buffer, ext) {
     }
     const url = await imagekitStore.uploadImage(imagekitObjectName(ext), buffer, ext);
     return { ext, url };
-  }
-  if (db.isPostgres()) {
-    await db.saveImage(BANNER_IMAGE_ID, ext, buffer);
-    return { ext };
   }
   ensureDir();
   for (const oldExt of ALLOWED_EXT) {
@@ -92,10 +80,6 @@ async function remove() {
     for (const ext of ALLOWED_EXT) {
       await imagekitStore.deleteImage(imagekitObjectName(ext));
     }
-  }
-  if (db.isPostgres()) {
-    await db.deleteImage(BANNER_IMAGE_ID);
-    return;
   }
   const f = await find();
   if (!f) return;

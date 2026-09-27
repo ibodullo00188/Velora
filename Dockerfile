@@ -1,11 +1,8 @@
 # KinoBot API — Docker image
 #
-# Backend tashqi kutubxonasiz (faqat Node.js ichki modullari: http, crypto,
-# fs, https) — shuning uchun `npm install` kerak emas va image juda kichik.
+# Telegram kutubxonasi production build paytida o‘rnatiladi.
 #
-# Frontend bu image ichida YO'Q — u statik fayl sifatida nginx orqali
-# xizmat qiladi (deploy/nginx.conf). Bot esa xuddi shu image asosida
-# alohida konteyner sifatida ishga tushadi (docker-compose.yml ga qarang).
+# API, WebApp va bot bitta xizmatda ishlaydi.
 
 FROM node:20-alpine
 
@@ -16,8 +13,10 @@ WORKDIR /app
 
 # Faqat backend katalogni nusxalaymiz (frontend nginx uchun alohida)
 COPY backend/ /app/backend/
+COPY frontend/ /app/frontend/
 
 WORKDIR /app/backend
+RUN npm ci --omit=dev --ignore-scripts
 
 # db.json yoziladigan data/ katalogi. Konteyner root sifatida emas, node
 # foydalanuvchisi sifatida ishlaydi (xavfsizlik) — ruxsatlarni shu yerga beramiz.
@@ -33,4 +32,4 @@ USER node
 # Ma'lumotlar doimiy saqlanadi (konteyner qayta yaratilsa ham yo'qolmaydi)
 VOLUME ["/app/backend/data"]
 
-CMD ["node", "server.js"]
+CMD ["node", "start-all.js"]

@@ -9,10 +9,9 @@
 const fs = require("fs");
 const path = require("path");
 
-const db = require("./db");
 const imagekitStore = require("./imagekitStore");
 
-const POSTERS_ROOT = path.join(__dirname, "..", "data", "posters");
+const POSTERS_ROOT = path.join(path.dirname(require("./db").getDbPath()), "posters");
 const ALLOWED_EXT = ["jpg", "jpeg", "png", "webp", "gif"];
 
 const MIME = {
@@ -44,17 +43,10 @@ function imagekitObjectName(movieId, ext) {
   return `kinobot/posters/${safeId(movieId)}.${ext}`;
 }
 
-// Mavjud poster faylini topadi (faqat Postgres/disk fallback uchun —
 // ImageKit'ga yuklangan posterlar to'liq URL sifatida movie.posterUrl'da
 // saqlanadi, shuning uchun bu funksiya orqali qidirilmaydi).
-// Postgres-rejimda: { ext, buffer } | null (DB'dan)
 // Fayl-rejimda (avvalgidek): { ext, absPath } | null (diskdan)
 async function findForMovie(movieId) {
-  if (db.isPostgres()) {
-    const found = await db.findImage(imageId(movieId));
-    if (!found) return null;
-    return { ext: found.ext, buffer: found.data };
-  }
   ensureDir();
   const base = safeId(movieId);
   for (const ext of ALLOWED_EXT) {
@@ -69,7 +61,6 @@ async function findForMovie(movieId) {
 }
 
 // Poster yozadi. Ustuvorlik: ImageKit (sozlangan bo'lsa, tashqi
-// doimiy URL bilan) → Postgres (DB'ga, deploy'da yo'qolmasligi uchun) →
 // disk (lokal). ImageKit ishlatilganda { ext, url } qaytadi — chaqiruvchi
 // shu url'ni to'g'ridan-to'g'ri posterUrl sifatida saqlashi kerak.
 async function savePoster(movieId, buffer, ext) {
@@ -82,10 +73,6 @@ async function savePoster(movieId, buffer, ext) {
     }
     const url = await imagekitStore.uploadImage(imagekitObjectName(movieId, ext), buffer, ext);
     return { ext, url };
-  }
-  if (db.isPostgres()) {
-    await db.saveImage(imageId(movieId), ext, buffer);
-    return { ext };
   }
   ensureDir();
   const base = safeId(movieId);
@@ -111,10 +98,6 @@ async function removeByMovieId(movieId) {
     for (const ext of ALLOWED_EXT) {
       await imagekitStore.deleteImage(imagekitObjectName(movieId, ext));
     }
-  }
-  if (db.isPostgres()) {
-    await db.deleteImage(imageId(movieId));
-    return;
   }
   const f = await findForMovie(movieId);
   if (!f) return;

@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getDbPath, isPostgres, load } = require("./db");
+const { getDbPath, replaceDatabase } = require("./db");
 
 const BACKUP_DIR = path.join(path.dirname(getDbPath()), "backups");
 
@@ -23,22 +23,12 @@ function ensureBackupDir() {
   return BACKUP_DIR;
 }
 
-// Joriy holatdan backup yaratadi.
-//   Fayl-rejim: diskda mavjud db.json'ni nusxalaydi (avvalgidek).
-//   Postgres-rejim: db.json fayl endi manba emas (persistToFile() chaqirilmaydi),
-//     shuning uchun xotiradagi (Postgresdan yuklangan) joriy holatni JSON
-//     qilib shu papkaga yozamiz — lokal disk vaqtinchalik bo'lsa ham
-//     (Render restart'da o'chadi), tez qo'lda tekshirish/tushirish uchun foydali.
-// return { path } | throws
+// Lokal JSON backup. Telegram backup alohida modulda.
 function createBackup({ reason = "manual" } = {}) {
   ensureBackupDir();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const dest = path.join(BACKUP_DIR, `db-${stamp}-${reason}.json`);
 
-  if (isPostgres()) {
-    fs.writeFileSync(dest, JSON.stringify(load(), null, 2), "utf-8");
-    return { path: dest };
-  }
 
   const src = getDbPath();
   if (!fs.existsSync(src)) {
@@ -61,19 +51,7 @@ function listBackups() {
     .sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
 }
 
-// Backup faylni asosiy db.json'ga tiklaydi.
-// NOTE: restore'dan keyin process cache'ini qayta yuklash kerak —
-// server ishlab turgan bo'lsa, resetDbCache() chaqirilishi lozim.
-// Postgres-rejimda BU FUNKSIYA ISHLATILMAYDI (db.json endi manba emas —
-// tiklash uchun `npm run db:migrate-to-postgres -- --force` dan foydalaning,
-// u yerga JSON faylni to'g'ridan-to'g'ri Postgres'ga yozadi).
 function restoreBackup(backupPath, { resetDbCache } = {}) {
-  if (isPostgres()) {
-    throw new Error(
-      "Postgres-rejimda bu buyruq ishlamaydi (db.json endi manba emas). " +
-        "Buning o'rniga: npm run db:migrate-to-postgres -- --force <fayl>"
-    );
-  }
   if (!backupPath) throw new Error("backupPath majburiy");
   const src = path.resolve(backupPath);
   if (!fs.existsSync(src)) throw new Error(`Backup topilmadi: ${backupPath}`);
@@ -96,7 +74,8 @@ function restoreBackup(backupPath, { resetDbCache } = {}) {
   }
 
   const dest = getDbPath();
-  fs.copyFileSync(src, dest);
+  require("./telegramBackup").validateDatabase(parsed);
+  replaceDatabase(parsed);
   if (typeof resetDbCache === "function") resetDbCache();
   return { path: src };
 }

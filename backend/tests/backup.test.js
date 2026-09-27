@@ -18,7 +18,7 @@ const { load, persist, resetForTest } = require("../src/db");
 
 function setupTestDB() {
   // Test DB yaratish
-  const src = path.join(__dirname, "..", "data", "db.json");
+  const src = path.join(__dirname, "fixtures", "seed-db.json");
   if (fs.existsSync(src)) fs.copyFileSync(src, TEST_DB);
   resetForTest();
 }

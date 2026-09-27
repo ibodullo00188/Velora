@@ -1,12 +1,10 @@
 # KinoBot — docker compose orqali ishga tushirish
 #
-#   docker compose up -d --build      # ikki xizmatni ishga tushiradi
+#   docker compose up -d --build      # xizmatni ishga tushiradi
 #   docker compose logs -f api        # loglarni kuzatish
 #   docker compose down               # to'xtatish (data volume saqlanadi)
 #
-# Ikki xizmat:
-#   api  — REST API (backend/server.js), host'da 3000-port
-#   bot  — Telegram long-polling bot (backend/bot.js) — alohida jarayon
+# API, WebApp va bot bitta jarayonda ishlaydi.
 #
 # Barcha maxfiy qiymatlar backend/.env faylidan olinadi
 # (git'ga kirmaydi — .gitignore himoya qiladi).
@@ -37,21 +35,6 @@ services:
       retries: 3
       start_period: 5s
 
-  bot:
-    build: .
-    image: kinobot-bot:latest
-    container_name: kinobot-bot
-    restart: unless-stopped
-    env_file:
-      - backend/.env
-    environment:
-      PORT: "3000"
-    # Bot api'dan oldin ishga tushishi shart emas — ular bevosita bog'liq emas,
-    # faqat BOT_TOKEN orqali. Shunga qaramay api'ni avval qurib olish uchun:
-    depends_on:
-      - api
-    # Long polling tashqi port talab qilmaydi
-    command: ["node", "bot.js"]
 
 volumes:
   kinobot-data:

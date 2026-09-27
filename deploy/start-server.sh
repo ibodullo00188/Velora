@@ -51,7 +51,7 @@ api_running() {
 }
 
 bot_pid() {
-  pgrep -f "node bot\.js" | head -1
+  pgrep -f "node (bot|start-all)\.js" | head -1
 }
 
 tunnel_url() {
@@ -190,7 +190,9 @@ start_bot() {
   else
     info "Bot ishga tushirilmoqda..."
   fi
-  ( cd "$BACKEND_DIR" && nohup node bot.js > "$LOG_BOT" 2>&1 & )
+  pkill -f "node server\.js" 2>/dev/null || true
+  sleep 1
+  ( cd "$BACKEND_DIR" && nohup node start-all.js > "$LOG_BOT" 2>&1 & )
   sleep 3
   if bot_pid >/dev/null; then
     ok "Bot ishlamoqda: $(grep -E 'Bot ishga tushdi' "$LOG_BOT" | tail -1 | sed 's/.*Bot ishga tushdi/Bot ishga tushdi/')"

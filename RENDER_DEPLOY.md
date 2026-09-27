@@ -137,3 +137,10 @@ mumkin), lekin amalda botni deyarli doim uyg'oq ushlab turadi.
   qayta qurildi, `start-all.js`ni ishga tushiradi.
 - `backend/`, `frontend/` ichidagi biznes-logika kodiga (route'lar,
   repository'lar, frontend JS/CSS) hech qanday tegilmagan.
+
+## Joriy backup tartibi
+
+Database lokal faylda saqlanadi. `npm run start:all` bot va API'ni bitta jarayonda ishga tushiradi.
+09:00 va 21:00 (Toshkent) kanalga shifrlangan backup yuboriladi.
+Tiklash faqat admin backup faylni botga forward qilib tasdiqlaganda bajariladi.
+Sozlamalar va cheklovlar: [Telegram backup qo'llanmasi](backend/docs/TELEGRAM_BACKUP.md).

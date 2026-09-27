@@ -38,7 +38,7 @@ services:
     plan: free
     region: frankfurt          # Markaziy Osiyoga yaqinroq bo'lishi uchun singapore ham ko'rib chiqilsin
     rootDir: backend
-    buildCommand: npm install  # tashqi kutubxona yo'q, tez tugaydi — kodni o'zgartirmaydi
+    buildCommand: npm ci --omit=dev
     startCommand: node start-all.js
     healthCheckPath: /api/health
     autoDeployTrigger: commit
@@ -55,12 +55,8 @@ services:
         sync: false             # shu xizmatning o'z Render URL'i, masalan https://kinobot.onrender.com
       - key: ALLOWED_ORIGINS
         sync: false             # frontend shu bilan bir origin bo'lgani uchun odatda bo'sh qoldirsa ham bo'ladi
-      - key: DATABASE_URL
-        sync: false
-        # IXTIYORIY, LEKIN TAVSIYA ETILADI: Neon (yoki boshqa Postgres)
-        # connection string. Bo'sh qoldirilsa — matn ma'lumotlar
-        # (filmlar, foydalanuvchilar) data/db.json fayliga saqlanadi,
-        # bu esa Free tarifda xizmat uxlab-uyg'onganda YO'QOLADI.
+      - key: TELEGRAM_BACKUP_ENABLED
+        value: "1"
       - key: IMAGEKIT_PRIVATE_KEY
         sync: false
       - key: IMAGEKIT_URL_ENDPOINT
@@ -68,7 +64,6 @@ services:
         # IXTIYORIY, LEKIN TAVSIYA ETILADI: poster/banner rasmlari uchun.
         # https://imagekit.io -> ro'yxatdan o'ting (bepul: 20GB) ->
         # Dashboard -> Developer options -> Private Key va URL-endpoint.
-        # Bo'sh qoldirilsa, rasmlar DATABASE_URL bo'lsa Postgres'ga,
         # bo'lmasa diskka (Free tarifda vaqtinchalik) saqlanadi.
       - key: LOCAL_VIDEOS_DIR
         value: /opt/render/project/src/backend/data/videos

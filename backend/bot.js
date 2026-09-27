@@ -17,7 +17,7 @@
 // Telegram'ning global "Menu" tugmasi (matn input yonida, pastda) orqali
 // ochiladi — matni "Movie" qilib o'rnatilgan (setChatMenuButton).
 //
-// Faqat Node.js ichki modullaridan foydalanadi (https) — tashqi kutubxona yo'q.
+// Telegram Bot API uchun https; video xizmati uchun telegram kutubxonasi.
 // Long polling (getUpdates) — webhook/HTTPS server shart emas.
 // Tarmoq xatolari va 409 Conflict uchun exponential backoff.
 // SIGINT/SIGTERM bilan toza (graceful) to'xtash.
@@ -195,11 +195,11 @@ async function sendAdminPanel(chatId) {
   await apiRequest("sendMessage", {
     chat_id: chatId,
     text:
-      "🛠 Admin panel WebApp ichida (#admin) ochiladi. Backend admin " +
-      "so'rovlari uchun X-Admin-Key header ishlatiladi.",
+      "🛠 Admin panel. Backup yaratishingiz yoki kanaldagi backup faylni forward qilib bazani tiklashingiz mumkin.",
     reply_markup: {
       inline_keyboard: [
         [{ text: "🛠 Admin panelni ochish", web_app: { url: `${WEBAPP_URL}#admin` } }],
+        [{ text: "💾 Backup yaratish", callback_data: "backup_create" }, { text: "♻️ Backupni tiklash", callback_data: "backup_restore" }],
       ],
     },
   });
@@ -286,6 +286,14 @@ async function handleUpdate(update) {
   // Inline tugma (callback) — masalan "❓ Yordam" bosilganda
   if (update.callback_query) {
     const cq = update.callback_query;
+    if (["backup_create", "backup_restore"].includes(cq.data)) {
+      await apiRequest("answerCallbackQuery", { callback_query_id: cq.id });
+      if (cq.message) await require("./src/telegramBackup").handleAdminMessage({
+        chat: cq.message.chat, from: cq.from,
+        text: cq.data === "backup_create" ? "/backup" : "/restore",
+      });
+      return;
+    }
     const chatId = cq.message && cq.message.chat ? cq.message.chat.id : null;
     if (cq.data === "help") {
       // Tugmadagi "yuklanmoqda" belgisini o'chirish
@@ -307,6 +315,8 @@ async function handleUpdate(update) {
   const chatId = msg.chat.id;
   const fromId = msg.from ? String(msg.from.id) : "";
   const firstName = msg.from ? msg.from.first_name : "";
+  if (await require("./src/telegramBackup").handleAdminMessage(msg)) return;
+
 
   // Shaxsiy chatdagi har bir foydalanuvchini users bazasida saqlaymiz —
   // aks holda broadcast (kanalga "*" bilan yuborilgan xabar) hech kimga
@@ -580,9 +590,7 @@ process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 // --- Ishga tushirish ---------------------------------------------------------
 (async () => {
-  // server.js'dan ALOHIDA process (start-all.js fork qiladi) — shuning uchun
-  // Postgres-rejimda o'z init()ini o'zi kutishi shart (DATABASE_URL bo'lmasa
-  // zudlik bilan tugaydi, xatti-harakat o'zgarmaydi).
+  // Fayl bazasi tayyor bo'lgach polling boshlanadi.
   try {
     await db.init();
   } catch (e) {

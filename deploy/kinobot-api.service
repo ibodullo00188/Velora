@@ -13,7 +13,7 @@
 #   2) WorkingDirectory (proyekt joylashgan papka)
 
 [Unit]
-Description=KinoBot REST API (backend/server.js)
+Description=KinoBot REST API (backend/start-all.js)
 Documentation=https://github.com/your-user/kinobot-project
 After=network-online.target
 Wants=network-online.target
@@ -22,7 +22,7 @@ Wants=network-online.target
 Type=simple
 
 # O'zingizning yo'llaringizga almashtiring:
-ExecStart=/usr/bin/node /opt/kinobot/backend/server.js
+ExecStart=/usr/bin/node /opt/kinobot/backend/start-all.js
 WorkingDirectory=/opt/kinobot/backend
 
 # .env fayli WorkingDirectory dan o'qiladi (server.js avtomatik yuklaydi).

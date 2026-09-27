@@ -1,33 +1,3 @@
-// src/db.js
-// Ikki xil "database" qatlami bitta modulda:
-//   1) Fayl-asosidagi (default) — data/db.json, Render'da restart/deploy'da
-//      diskning o'zi tozalanib ketadi (ephemeral).
-//   2) PostgreSQL (DATABASE_URL o'rnatilganda) — Neon va h.k. Postgres
-//      xizmatida bitta JSONB qatorda saqlanadi (repository'lar butun db
-//      obyektini load()/persist() orqali ishlatadi, shu sababli individual
-//      jadval/SQL qayta yozishga hojat yo'q — faqat shu modul o'zgaradi).
-//
-// DATABASE_URL yo'q bo'lsa — xatti-harakat OLDINGIDEK, bitta baytigacha
-// o'zgarmagan (fayl-rejim quyida to'liq saqlangan).
-//
-// Xususiyatlari (fayl-rejim):
-//  - Atomic yozish (temp fayl + rename) — jarayon o'lsa db.json buzilmaydi
-//  - Yuklashda schema normalizatsiyasi + validatsiyasi
-//  - Corruption recovery — buzilgan fayl o'rniga .bak dan tiklash / zaxirada
-//  - Eski temp fayllarni tozalash (stale .tmp)
-//  - Xotirada kesh + yozish navbati (race condition himoyasi)
-//  - backup moduli bilan integratsiya (src/backup.js)
-//
-// Xususiyatlari (Postgres-rejim):
-//  - Bitta jadval (kinobot_store), bitta qator, JSONB ustun — butun db.json
-//    tarkibi shu yerda, fayl-rejimdagi schema bilan bir xil
-//  - server.js/bot.js ALOHIDA process (start-all.js fork qiladi) — shuning
-//    uchun har 5s da fon rejimida boshqa process yozgan o'zgarish bor-yo'qligi
-//    tekshiriladi (updated_at solishtiriladi), bo'lsa qayta yuklanadi
-//  - Xotirada kesh — load() SINXRON qoladi (repository'lar shuni kutadi),
-//    tarmoq so'rovi faqat init()da (server ishga tushishidan OLDIN kutiladi)
-//    va fon poll'da bo'ladi
-
 const fs = require("fs");
 const path = require("path");
 
@@ -37,9 +7,6 @@ const DB_PATH = process.env.DATABASE_PATH
 const TMP_PATH = DB_PATH + ".tmp";
 const BAK_PATH = DB_PATH + ".bak";
 
-const DATABASE_URL = process.env.DATABASE_URL || "";
-const USE_POSTGRES = Boolean(DATABASE_URL);
-const POLL_INTERVAL_MS = 5000;
 
 // Fresh clone'da (masalan Render'da birinchi deploy) data/ papkasi umuman
 // mavjud bo'lmasligi mumkin (.gitignore uni repodan chiqarib tashlaydi,
@@ -48,16 +15,7 @@ const POLL_INTERVAL_MS = 5000;
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 let cache = null;
-// db.json OXIRGI o'qilgan mtime'si. `start-all.js` server.js (uzoq muddat
-// ishlaydigan asosiy jarayon) va bot.js (alohida fork qilingan child
-// process) ni BIRGA ishga tushiradi — ikkalasi ham shu faylni o'qiydi/
-// yozadi, lekin ular ALOHIDA OS jarayonlari, xotira keshi ORTIQ umumiy emas.
-// Agar `cache` faqat "birinchi load()da to'ldirilib, keyin hech qachon
-// yangilanmasa" (avvalgi holat), bot.js yangi film yozganda server.js
-// (webapp/admin panel) buni HECH QACHON ko'rmaydi — chunki uning xotiradagi
-// nusxasi eskirgan bo'lib qoladi, fayl diskda o'zgargan bo'lsa ham.
-// Shuning uchun har bir load() chaqiruvida faylning mtime'si tekshiriladi;
-// agar boshqa jarayon uni o'zgartirgan bo'lsa — qayta o'qiladi.
+// Manual file replacement invalidates the cache. Bot/API share one process.
 let cachedMtimeMs = 0;
 
 function currentMtimeMs() {
@@ -68,7 +26,7 @@ function currentMtimeMs() {
   }
 }
 
-let writeQueue = Promise.resolve();
+
 
 const DEFAULT_GENRES = [
   "Action", "Comedy", "Drama", "Horror", "Sci-Fi", "Thriller",
@@ -418,208 +376,31 @@ function loadFromFile() {
 }
 
 function persistToFile() {
-  writeQueue = writeQueue.then(
-    () =>
-      new Promise((resolve, reject) => {
-        try {
-          const json = JSON.stringify(cache, null, 2);
-          // Atomic yozish: avval temp faylga, keyin rename
-          fs.writeFileSync(TMP_PATH, json, "utf-8");
-          fs.renameSync(TMP_PATH, DB_PATH);
-          // O'zimiz yozgan holatni "yangi" deb belgilaymiz — shu jarayonning
-          // keyingi load() chaqiruvi o'z-o'zining yozuvini qayta o'qib
-          // (ortiqcha, lekin zararsiz) I/O sarflamasin.
-          cachedMtimeMs = currentMtimeMs();
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      })
-  );
-  return writeQueue;
+  try {
+    fs.writeFileSync(TMP_PATH, JSON.stringify(cache || load(), null, 2), "utf-8");
+    fs.renameSync(TMP_PATH, DB_PATH);
+    cachedMtimeMs = currentMtimeMs();
+    return Promise.resolve();
+  } catch (err) { return Promise.reject(err); }
 }
 
-// ---------------------------------------------------------------------------
-// Postgres-rejim (DATABASE_URL o'rnatilganda)
-// ---------------------------------------------------------------------------
-let pgPool = null;
-let cachedUpdatedAtIso = null; // Postgresdagi oxirgi ko'rilgan updated_at
-let pollTimer = null;
-let initPromise = null;
-
-function getPool() {
-  if (!pgPool) {
-    // Faqat shu yerda talab qilinadi — DATABASE_URL bo'lmasa "pg" paketi
-    // umuman yuklanmaydi (fayl-rejimda hech qanday tashqi bog'liqlik yo'q).
-    const { Pool } = require("pg");
-    pgPool = new Pool({
-      connectionString: DATABASE_URL,
-      // Neon va ko'pchilik boshqa boshqaruvli Postgres xizmatlari uchun
-      // odatiy SSL rejimi (o'z-sertifikatini tekshirmaymiz).
-      ssl: { rejectUnauthorized: false },
-      max: 5,
-    });
-    pgPool.on("error", (err) => {
-      console.error("[db] Postgres pool xatosi (fon):", err.message);
-    });
-  }
-  return pgPool;
-}
-
-async function ensureTable() {
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS kinobot_store (
-      id INTEGER PRIMARY KEY,
-      data JSONB NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
-  // Poster/banner rasmlari uchun alohida jadval — Render'ning ephemeral
-  // diskiga bog'liq bo'lmasligi uchun (deploy/restart'da fayl yo'qolib
-  // ketmasligi kerak). Kichik rasmlar (<=2MB) BYTEA ustunda saqlanadi.
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS kinobot_images (
-      id TEXT PRIMARY KEY,
-      ext TEXT NOT NULL,
-      data BYTEA NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
-}
-
-// Postgres-rejimda poster/banner rasmini saqlaydi (id: masalan "poster:123"
-// yoki "banner"). Fayl-rejimdagi posterStore/bannerStore bilan bir xil
-// vazifani bajaradi, faqat diskka emas — DB'ga yozadi.
-async function pgSaveImage(id, ext, buffer) {
-  await getPool().query(
-    `INSERT INTO kinobot_images (id, ext, data, updated_at) VALUES ($1, $2, $3, now())
-     ON CONFLICT (id) DO UPDATE SET ext = $2, data = $3, updated_at = now()`,
-    [id, ext, buffer]
-  );
-}
-
-async function pgFindImage(id) {
-  const res = await getPool().query("SELECT ext, data FROM kinobot_images WHERE id = $1", [id]);
-  if (res.rows.length === 0) return null;
-  return { ext: res.rows[0].ext, data: res.rows[0].data };
-}
-
-async function pgDeleteImage(id) {
-  await getPool().query("DELETE FROM kinobot_images WHERE id = $1", [id]);
-}
-
-async function pgLoad() {
-  const res = await getPool().query("SELECT data, updated_at FROM kinobot_store WHERE id = 1");
-  if (res.rows.length === 0) {
-    const fresh = defaultDb();
-    await getPool().query(
-      "INSERT INTO kinobot_store (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
-      [JSON.stringify(fresh)]
-    );
-    const res2 = await getPool().query("SELECT data, updated_at FROM kinobot_store WHERE id = 1");
-    cache = normalize(res2.rows[0].data);
-    cachedUpdatedAtIso = res2.rows[0].updated_at.toISOString();
-    return cache;
-  }
-  cache = normalize(res.rows[0].data);
-  cachedUpdatedAtIso = res.rows[0].updated_at.toISOString();
-  return cache;
-}
-
-async function pgPersist() {
-  const json = JSON.stringify(cache);
-  const res = await getPool().query(
-    `INSERT INTO kinobot_store (id, data, updated_at) VALUES (1, $1, now())
-     ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = now()
-     RETURNING updated_at`,
-    [json]
-  );
-  if (res.rows[0]) cachedUpdatedAtIso = res.rows[0].updated_at.toISOString();
-}
-
-// server.js va bot.js ALOHIDA OS jarayoni (start-all.js fork qiladi) —
-// ikkalasi ham xotirada o'z nusxasini saqlaydi. Fayl-rejimda bu muammo
-// bo'lmagan (umumiy disk, mtime tekshiruvi bilan har load()da yangilanadi).
-// Postgres-rejimda esa load() sinxron bo'lishi SHART (repository'lar shuni
-// kutadi), shuning uchun tarmoqni har load()da so'rab bo'lmaydi — buning
-// o'rniga fonda har necha soniyada bir marta tekshirib turamiz.
-function startPolling() {
-  if (pollTimer) return;
-  pollTimer = setInterval(async () => {
-    try {
-      const res = await getPool().query("SELECT updated_at FROM kinobot_store WHERE id = 1");
-      const remoteIso = res.rows[0] ? res.rows[0].updated_at.toISOString() : null;
-      if (remoteIso && remoteIso !== cachedUpdatedAtIso) {
-        await pgLoad();
-      }
-    } catch (e) {
-      console.error("[db] Postgres poll xatosi:", e.message);
-    }
-  }, POLL_INTERVAL_MS);
-  pollTimer.unref();
-}
-
-// Server/bot ishga tushishidan OLDIN chaqirilishi SHART (Postgres-rejimda
-// birinchi ma'lumotni tarmoqdan olib kelish uchun). Fayl-rejimda hech narsa
-// qilmaydi (load() lazy, avvalgidek) — chaqirilmasa ham xatti-harakat bir xil.
+// One process owns the file database; server and bot share the same cache.
+let initPromise;
 async function init() {
-  if (initPromise) return initPromise;
-  initPromise = (async () => {
-    if (!USE_POSTGRES) return;
-    await ensureTable();
-    await pgLoad();
-    startPolling();
-  })();
+  if (!initPromise) initPromise = require("./telegramBackup").initializeLocal();
   return initPromise;
 }
-
-function load() {
-  if (USE_POSTGRES) {
-    if (!cache) {
-      // Ehtiyot chorasi: kimdir init()ni kutmasdan load() chaqirsa,
-      // server qulab tushmasin — bo'sh schema bilan davom etamiz va
-      // ogohlantiramiz (bu normal holatda YUZ BERMASLIGI kerak).
-      console.error("[db] load() init() tugashidan OLDIN chaqirildi — bo'sh schema bilan davom etilmoqda");
-      cache = defaultDb();
-    }
-    return cache;
-  }
-  return loadFromFile();
+function load() { return loadFromFile(); }
+function persist() { return persistToFile(); }
+function resetForTest() { cache = null; cachedMtimeMs = 0; }
+function replaceDatabase(data) {
+  const json = JSON.stringify(data, null, 2);
+  fs.writeFileSync(TMP_PATH, json);
+  fs.renameSync(TMP_PATH, DB_PATH);
+  resetForTest();
 }
-
-function persist() {
-  if (USE_POSTGRES) {
-    writeQueue = writeQueue.then(() => pgPersist());
-    return writeQueue;
-  }
-  return persistToFile();
-}
-
-// Testlar uchun: keshlangan ma'lumotni qayta yuklash (har testdan oldin toza holat).
-function resetForTest() {
-  cache = null;
-  cachedMtimeMs = 0;
-  cachedUpdatedAtIso = null;
-  writeQueue = Promise.resolve();
-  initPromise = null;
-}
-
 module.exports = {
-  init,
-  load,
-  persist,
-  resetForTest,
-  DEFAULT_GENRES,
-  normalizeMovie,
-  normalize,
-  normalizeHistoryEntry,
-  validateSchema,
-  getDbPath: () => DB_PATH,
-  getBakPath: () => BAK_PATH,
-  isPostgres: () => USE_POSTGRES,
-  // Poster/banner rasmlari uchun (faqat Postgres-rejimda mazmunli;
-  // fayl-rejimda posterStore/bannerStore o'zi diskka yozadi).
-  saveImage: (id, ext, buffer) => pgSaveImage(id, ext, buffer),
-  findImage: (id) => pgFindImage(id),
-  deleteImage: (id) => pgDeleteImage(id),
+  init, load, persist, resetForTest, replaceDatabase,
+  DEFAULT_GENRES, normalizeMovie, normalize, normalizeHistoryEntry, validateSchema,
+  getDbPath: () => DB_PATH, getBakPath: () => BAK_PATH,
 };

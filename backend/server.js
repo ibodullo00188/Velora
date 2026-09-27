@@ -5,7 +5,6 @@
 //   server.js → repositories (src/repositories) → db (src/db) → data/db.json
 //
 // server.js database implementatsiyasining ichki tafsilotini bilmaydi —
-// barcha DB access repository'lar orqali. SQLite/PostgreSQL'ga o'tishda
 // faqat repository'lar almashtiriladi.
 //
 // API formati:
@@ -2079,7 +2078,6 @@ async function handleAdminDeletePoster(req, res, id) {
 }
 
 // GET /api/movies/:id/poster — film posterini uzatish (public, kesh bilan).
-// Postgres-rejimda DB'dagi buferdan, fayl-rejimda diskdan uzatiladi.
 async function handleMoviePoster(req, res, id) {
   const found = await posterStore.findForMovie(id);
   if (!found) return fail(res, 404, "NOT_FOUND", "Poster topilmadi");
@@ -2127,7 +2125,6 @@ function handleGetBanner(req, res) {
 }
 
 // GET /api/banner/image — banner rasmini uzatish (public, kesh bilan).
-// Postgres-rejimda DB'dagi buferdan, fayl-rejimda diskdan uzatiladi.
 async function handleBannerImage(req, res) {
   const found = await bannerStore.find();
   if (!found) return fail(res, 404, "NOT_FOUND", "Banner rasmi topilmadi");
@@ -2307,11 +2304,9 @@ const server = http.createServer(async (req, res) => {
         // yukni bir nechta bot orasida taqsimlayapti degani.
         sessions: mtproto.getSessionStats(),
       };
-      // storage — DATABASE_URL o'rnatilgan bo'lsa "postgres", aks holda "file".
       // Server MUVAFFAQIYATLI ishga tushgan bo'lsa (bu javobni qaytarayotgan
-      // bo'lsa) — Postgres-rejimda ulanish ALLAQACHON tasdiqlangan (db.init()
       // ulanmasa server umuman ishga tushmaydi, server.js buni to'xtatadi).
-      const storage = db.isPostgres() ? "postgres" : "file";
+      const storage = "file";
       return ok(res, ready ? 200 : 503, { status: ready ? "ready" : "not_ready", checks, storage, mtprotoPool });
     }
 
@@ -2748,7 +2743,9 @@ process.once("SIGINT", () => gracefulShutdown("SIGINT"));
 process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 // Analytics buffer'ni vaqt-vaqti bilan DB'ga yozamiz (playback sekinlashmasin).
+let databaseReady = false;
 const analyticsTimer = setInterval(() => {
+  if (!databaseReady) return;
   repos.analytics.flush().catch((e) => logger.error("[analytics] flush xatosi", { err: e }));
 }, ANALYTICS_FLUSH_MS);
 analyticsTimer.unref();
@@ -2759,14 +2756,15 @@ analyticsTimer.unref();
 // lekin DB holatini vaqtida tozalash uchun har soatda ishga tushiriladi.
 const PREMIUM_EXPIRY_CHECK_MS = 60 * 60 * 1000; // 1 soat
 const premiumExpiryTimer = setInterval(() => {
+  if (!databaseReady) return;
   repos.premium.expirePremiumUsers().catch((e) => logger.error("[premium] muddati tugaganlarni tozalash xatosi", { err: e }));
 }, PREMIUM_EXPIRY_CHECK_MS);
 premiumExpiryTimer.unref();
 // Server ishga tushganda ham bir marta darhol tekshiramiz.
-repos.premium.expirePremiumUsers().catch((e) => logger.error("[premium] boshlang'ich tekshiruv xatosi", { err: e }));
+
 
 // Avtomatik backup (BACKUP_ENABLED=1 bo'lsa).
-startAutoBackup();
+
 
 // ---------------------------------------------------------------------------
 // Static file serving — frontend papkasidan fayllarni xizmat qiladi.
@@ -2863,17 +2861,18 @@ server.on("request", async (req, res) => {
   }
 });
 
-// DATABASE_URL o'rnatilmagan bo'lsa db.init() zudlik bilan tugaydi (fayl-rejim
-// avvalgidek — hech narsa o'zgarmaydi). O'rnatilgan bo'lsa, Postgres'dan
 // dastlabki ma'lumot to'liq yuklanguncha server so'rov qabul qilmaydi.
-db.init()
+module.exports.ready = db.init()
   .then(() => {
+    databaseReady = true;
+    startAutoBackup();
+    require("./src/telegramBackup").startScheduler();
     server.listen(PORT, () => {
       logger.info(`KinoBot API http://localhost:${PORT} portida ishga tushdi`);
       logger.info(`  Dev mode: ${DEV_MODE}`);
       logger.info(`  Admin ID: ${ADMIN_ID || "(o'rnatilmagan)"}`);
       logger.info(`  Admin Key: ${ADMIN_KEY ? "(o'rnatilgan)" : "(o'rnatilmagan)"}`);
-      logger.info(`  Ma'lumotlar bazasi: ${db.isPostgres() ? "PostgreSQL" : "fayl (data/db.json)"}`);
+      logger.info(`  Ma'lumotlar bazasi: fayl (data/db.json)`);
       logger.info(`  Health:   GET http://localhost:${PORT}/api/health`);
       logger.info(`  Ready:    GET http://localhost:${PORT}/api/ready`);
     });
