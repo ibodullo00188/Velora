@@ -208,7 +208,11 @@ function startScheduler() {
 }
 async function handleAdminMessage(msg) {
   const text = (msg.text || msg.caption || "").trim();
-  const command = text.split(/\s/)[0].split("@")[0];
+  const buttonCommands = {
+    "💾 Backup yaratish": "/backup",
+    "♻️ Backupni qayta tiklash": "/restore",
+  };
+  const command = buttonCommands[text] || text.split(/\s/)[0].split("@")[0];
   const isFile = /\.kbak$/i.test(msg.document?.file_name || "");
   if (!["/backup", "/restore", "/restore_confirm", "/restore_cancel"].includes(command) && !isFile) return false;
   if (msg.chat.type !== "private" || String(msg.from?.id) !== String(process.env.ADMIN_ID || "")) return true;
@@ -216,7 +220,7 @@ async function handleAdminMessage(msg) {
   try {
     if (command === "/backup") {
       if (!enabled()) throw new Error("Backup kanali sozlanmagan yoki backup o'chirilgan");
-      await sendBackup(); await reply("✅ Yangi backup kanalga yuborildi saqlandi.");
+      await sendBackup(); await reply("✅ Yangi backup kanalga yuborildi.");
     } else if (command === "/restore_cancel") {
       pending.delete(msg.from.id); await reply("Tiklash bekor qilindi.");
     } else if (command === "/restore_confirm") {

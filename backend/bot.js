@@ -145,13 +145,7 @@ function escapeHtml(s) {
   return String(s || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
 
-// Salomlashuv xabari:
-//   Matn ostida (pastida) WebApp'ni ochuvchi inline tugma bilan yuboriladi.
-//   (Oldin bundan tashqari chatning pastki qismida doimiy ko'rinib turadigan
-//   qo'shimcha "pastki panel" (reply keyboard) tugmasi ham o'rnatilardi —
-//   ortiqcha/dublikat bo'lgani uchun olib tashlandi. WebApp'ga kirish endi
-//   shu inline tugma va global Menu tugmasi (setMenuButton) orqali amalga
-//   oshiriladi.)
+// Movie inline tugmasi; admin backup tugmalari alohida reply keyboard.
 async function sendWelcome(chatId, firstName) {
   const name = firstName ? escapeHtml(firstName) : "";
   const greeting = name ? `Assalomu alaykum, ${name}! 👋` : "Assalomu alaykum! 👋";
@@ -191,15 +185,28 @@ async function sendHelp(chatId) {
   });
 }
 
+async function showAdminBackupKeyboard(msg) {
+  if (msg.chat.type !== "private" || !ADMIN_ID || String(msg.from?.id) !== ADMIN_ID) return;
+  await apiRequest("sendMessage", {
+    chat_id: msg.chat.id,
+    text: "Backup tugmalari pastki panelda. Tiklash uchun kerakli backup faylni botga forward qiling.",
+    reply_markup: {
+      keyboard: [[{ text: "💾 Backup yaratish" }], [{ text: "♻️ Backupni qayta tiklash" }]],
+      resize_keyboard: true,
+      is_persistent: true,
+      one_time_keyboard: false,
+    },
+  });
+}
+
 async function sendAdminPanel(chatId) {
   await apiRequest("sendMessage", {
     chat_id: chatId,
     text:
-      "🛠 Admin panel. Backup yaratishingiz yoki kanaldagi backup faylni forward qilib bazani tiklashingiz mumkin.",
+      "🛠 Admin panelni ochish uchun quyidagi tugmani bosing.",
     reply_markup: {
       inline_keyboard: [
         [{ text: "🛠 Admin panelni ochish", web_app: { url: `${WEBAPP_URL}#admin` } }],
-        [{ text: "💾 Backup yaratish", callback_data: "backup_create" }, { text: "♻️ Backupni tiklash", callback_data: "backup_restore" }],
       ],
     },
   });
@@ -288,10 +295,14 @@ async function handleUpdate(update) {
     const cq = update.callback_query;
     if (["backup_create", "backup_restore"].includes(cq.data)) {
       await apiRequest("answerCallbackQuery", { callback_query_id: cq.id });
-      if (cq.message) await require("./src/telegramBackup").handleAdminMessage({
-        chat: cq.message.chat, from: cq.from,
-        text: cq.data === "backup_create" ? "/backup" : "/restore",
-      });
+      // Old messages migrate to the bottom keyboard when their retired buttons are tapped.
+      if (cq.message?.chat.type === "private" && ADMIN_ID && String(cq.from?.id) === ADMIN_ID) {
+        await apiRequest("editMessageReplyMarkup", {
+          chat_id: cq.message.chat.id, message_id: cq.message.message_id,
+          reply_markup: { inline_keyboard: [[{ text: "🛠 Admin panelni ochish", web_app: { url: `${WEBAPP_URL}#admin` } }]] },
+        });
+        await showAdminBackupKeyboard({ chat: cq.message.chat, from: cq.from });
+      }
       return;
     }
     const chatId = cq.message && cq.message.chat ? cq.message.chat.id : null;
@@ -334,11 +345,13 @@ async function handleUpdate(update) {
 
     if (text === "/start") {
       await sendWelcome(chatId, firstName);
+      await showAdminBackupKeyboard(msg);
       return;
     }
 
     if (text === "/help") {
       await sendHelp(chatId);
+      await showAdminBackupKeyboard(msg);
       return;
     }
 
@@ -346,6 +359,7 @@ async function handleUpdate(update) {
       if (ADMIN_ID) {
         if (fromId === ADMIN_ID) {
           await sendAdminPanel(chatId);
+          await showAdminBackupKeyboard(msg);
         } else {
           await sendAdminDenied(chatId);
         }

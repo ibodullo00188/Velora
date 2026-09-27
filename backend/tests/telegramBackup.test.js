@@ -76,7 +76,8 @@ test("new startup waits until next slot; send succeeds once per slot", async () 
   assert.ok(!calls.some(x => /getChat|pinChatMessage/.test(x.url)));
 });
 test("every manual backup is a new upload; failure does not mark successful", async () => {
-  await backup.sendBackup(); await backup.sendBackup();
+  await backup.handleAdminMessage({ chat: { id: 42, type: "private" }, from: { id: 42 }, text: "💾 Backup yaratish" });
+  await backup.sendBackup();
   assert.equal(calls.filter(x => x.url.endsWith("/sendDocument")).length, 2);
   const old = structuredClone(db.load().settings.telegramBackup);
   failSend = true;
@@ -97,6 +98,8 @@ test("restore applies data and images; saves pre-restore copy and removes stale 
 test("unauthorized users and group chats cannot upload or restore", async () => {
   for (const msg of [
     { chat: { id: 7, type: "private" }, from: { id: 7 }, text: "/backup" },
+    { chat: { id: 7, type: "private" }, from: { id: 7 }, text: "💾 Backup yaratish" },
+    { chat: { id: 7, type: "private" }, from: { id: 7 }, text: "♻️ Backupni qayta tiklash" },
     { chat: { id: 7, type: "private" }, from: { id: 7 }, document: { file_name: "test.kbak", file_id: "x" } },
     { chat: { id: -7, type: "group" }, from: { id: 42 }, text: "/restore" },
   ]) assert.equal(await backup.handleAdminMessage(msg), true);
@@ -116,7 +119,7 @@ test("admin forwarding only previews; nonce confirmation performs manual restore
   assert.equal(db.load().movies.length, 0);
 });
 test("restore without a file only gives instructions; no channel history or automatic restore", async () => {
-  await backup.handleAdminMessage({ chat: { id: 42, type: "private" }, from: { id: 42 }, text: "/restore" });
+  await backup.handleAdminMessage({ chat: { id: 42, type: "private" }, from: { id: 42 }, text: "♻️ Backupni qayta tiklash" });
   assert.equal(calls.length, 1);
   assert.ok(calls[0].body.text.includes("forward"));
 });

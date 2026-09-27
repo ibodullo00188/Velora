@@ -38,7 +38,10 @@ Yangi baza darhol kanalga yuborilmaydi; birinchi avtomatik yuborish keyingi reja
 
 ## Qo'lda backup va restore
 
-`/admin` panelida **Backup yaratish** va **Backupni tiklash** tugmalari bor.
+Admin botga `/start` yuborganda Telegram pastki tugmalar panelida
+**💾 Backup yaratish** va **♻️ Backupni qayta tiklash** tugmalari chiqadi.
+Ular faqat `ADMIN_ID` egasining shaxsiy chatida ko‘rinadi; admin panel ichida emas.
+`/admin` va `/help` ham pastki panelni qayta ko‘rsatadi.
 
 1. `/backup` — ayni paytdagi yangi nusxani kanalga yuboradi.
 2. Tiklash uchun kanaldagi kerakli (odatda eng oxirgi) `.kbak` faylni botning shaxsiy chatiga **forward** qiling.
