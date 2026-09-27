@@ -1,0 +1,15 @@
+# Dependencies and local configuration
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Runtime databases, uploads, and Telegram sessions
+backend/data/*
+!backend/data/banner/
+!backend/data/banner/image.jpg
+*.session
+*.session-journal
+telegram-mtproto-session*.txt
+*.log
+.DS_Store
